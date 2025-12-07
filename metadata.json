@@ -1,0 +1,7 @@
+{
+  "name": "ExamFlow AI",
+  "description": "A fast, AI-powered exam creation tool for teachers. Features Snap-to-Text OCR, AI Question Generation, and a structured Question Editor with QR code integration.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
