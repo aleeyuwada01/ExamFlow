@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, School, UserRole, NIGERIAN_SUBJECTS, SCHOOL_CLASSES } from '../types';
-import { getSchool, saveSchool, getSchoolTeachers, saveUser, bulkCreateUsers, generateTeacherCredentials } from '../services/storageService';
+import { User, School, UserRole, NIGERIAN_SUBJECTS, SCHOOL_CLASSES, SystemConfig, PlanTier } from '../types';
+import { getSchool, saveSchool, getSchoolTeachers, saveUser, bulkCreateUsers, generateTeacherCredentials, getSystemConfig } from '../services/storageService';
 
 interface SchoolSettingsProps {
   currentUser: User;
@@ -11,6 +11,7 @@ interface SchoolSettingsProps {
 export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onBack }) => {
   const [school, setSchool] = useState<School | undefined>(undefined);
   const [teachers, setTeachers] = useState<User[]>([]);
+  const [config, setConfig] = useState<SystemConfig>(getSystemConfig());
   const [activeTab, setActiveTab] = useState<'TEMPLATE' | 'TEACHERS'>('TEMPLATE');
   
   // Template State
@@ -37,15 +38,16 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
   const [generatedPreview, setGeneratedPreview] = useState<any[]>([]);
 
   useEffect(() => {
-    const s = getSchool(currentUser.schoolId);
+    const s = getSchool(currentUser.school_id);
     if (s) {
       setSchool(s);
-      setFooterText(s.template.footerText);
-      setHeaderLayout(s.template.headerLayout);
-      setFontFamily(s.template.fontFamily);
-      setThemeColor(s.template.themeColor || '#000000');
+      setFooterText(s.template.footer_text);
+      setHeaderLayout(s.template.header_layout);
+      setFontFamily(s.template.font_family);
+      setThemeColor(s.template.theme_color || '#000000');
     }
-    setTeachers(getSchoolTeachers(currentUser.schoolId));
+    setTeachers(getSchoolTeachers(currentUser.school_id));
+    setConfig(getSystemConfig());
   }, [currentUser]);
 
   // --- Template Logic ---
@@ -56,10 +58,10 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
       ...school,
       template: {
         ...school.template,
-        footerText,
-        headerLayout,
-        fontFamily,
-        themeColor
+        footer_text: footerText,
+        header_layout: headerLayout,
+        font_family: fontFamily,
+        theme_color: themeColor
       }
     };
     saveSchool(updatedSchool);
@@ -72,7 +74,7 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
     if (file && school) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        const updatedSchool = { ...school, logoUrl: reader.result as string };
+        const updatedSchool = { ...school, logo_url: reader.result as string };
         saveSchool(updatedSchool);
         setSchool(updatedSchool);
       };
@@ -118,22 +120,36 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
         return;
     }
 
+    // Business Logic: Check Teacher Account Limit for Free Tokens
+    const teacherCount = teachers.length;
+    const tokensToGrant = teacherCount < config.maxTeachersWithFreeTokens ? config.initialFreeTokens : 0;
+
+    // Fixed: Added missing 'plan' property to satisfy User interface requirements
     const newUser: User = {
         id: crypto.randomUUID(),
         name: newTeacherName,
         email: newTeacherEmail,
         role: UserRole.TEACHER,
-        schoolId: currentUser.schoolId,
+        school_id: currentUser.school_id,
+        state: currentUser.state,
         subjects: Array.from(selectedSubjects),
         classes: Array.from(selectedClasses),
-        password: newTeacherPassword // In a real app, hash this!
+        password: newTeacherPassword,
+        created_at: Date.now(),
+        tokens: tokensToGrant,
+        plan: PlanTier.FREE
     };
 
     saveUser(newUser);
-    setTeachers(getSchoolTeachers(currentUser.schoolId));
-    setFormSuccess(`Created account for ${newTeacherName} with password: ${newTeacherPassword}`);
+    const updatedTeachers = getSchoolTeachers(currentUser.school_id);
+    setTeachers(updatedTeachers);
     
-    // Reset
+    let successMsg = `Created account for ${newTeacherName}. Password: ${newTeacherPassword}.`;
+    if (tokensToGrant > 0) successMsg += ` (Granted ${tokensToGrant} free tokens)`;
+    else successMsg += ` (Free token limit reached for this school)`;
+    
+    setFormSuccess(successMsg);
+    
     setNewTeacherName('');
     setNewTeacherEmail('');
     setNewTeacherPassword('');
@@ -145,9 +161,9 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
   const handleBulkUpload = async () => {
       if (!csvFile) return;
       const text = await csvFile.text();
-      const result = bulkCreateUsers(text, currentUser.schoolId);
+      const result = bulkCreateUsers(text, currentUser.school_id);
       
-      setTeachers(getSchoolTeachers(currentUser.schoolId));
+      setTeachers(getSchoolTeachers(currentUser.school_id));
       let message = `Created ${result.created} accounts successfully.`;
       if (result.errors.length > 0) {
           message += `\nEncountered ${result.errors.length} errors. Check console details.`;
@@ -174,22 +190,31 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
       if (!generatedPreview.length) return;
       
       let createdCount = 0;
+      let existingCount = teachers.length;
+      
       generatedPreview.forEach(p => {
-           const newUser: User = {
+          const tokensToGrant = (existingCount + createdCount) < config.maxTeachersWithFreeTokens ? config.initialFreeTokens : 0;
+          
+          // Fixed: Added missing 'plan' property to satisfy User interface requirements
+          const newUser: User = {
             id: crypto.randomUUID(),
             name: p.name,
             email: p.email,
             password: p.password,
             role: UserRole.TEACHER,
-            schoolId: currentUser.schoolId,
+            school_id: currentUser.school_id,
+            state: currentUser.state,
             subjects: [p.subject],
-            classes: [p.className]
+            classes: [p.className],
+            created_at: Date.now(),
+            tokens: tokensToGrant,
+            plan: PlanTier.FREE
           };
           saveUser(newUser);
           createdCount++;
       });
       
-      setTeachers(getSchoolTeachers(currentUser.schoolId));
+      setTeachers(getSchoolTeachers(currentUser.school_id));
       alert(`Successfully created ${createdCount} teacher accounts!`);
       setGeneratedPreview([]);
       setAutoGenClasses(new Set());
@@ -197,7 +222,6 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 bg-slate-50 dark:bg-slate-900 min-h-screen font-sans text-slate-900 dark:text-white transition-colors">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <button onClick={onBack} className="bg-white dark:bg-slate-800 p-2 rounded-full shadow hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors">
           <i className="fas fa-arrow-left text-xl"></i>
@@ -208,7 +232,6 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-4 mb-8 border-b border-slate-200 dark:border-slate-700 pb-1">
         <button 
           onClick={() => setActiveTab('TEMPLATE')}
@@ -226,7 +249,6 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
 
       {activeTab === 'TEMPLATE' && school && (
         <div className="flex flex-col lg:flex-row gap-8 h-[calc(100vh-250px)]">
-           {/* Controls Panel */}
            <div className="w-full lg:w-1/3 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-y-auto">
                 <h3 className="font-bold text-lg mb-6 text-slate-800 dark:text-white">Visual Editor</h3>
                 
@@ -235,7 +257,7 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                         <label className="block text-sm font-bold mb-2 text-slate-700 dark:text-slate-300">School Logo</label>
                         <div className="flex items-center gap-4">
                             <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 border dark:border-slate-600 rounded flex items-center justify-center overflow-hidden">
-                                {school.logoUrl ? <img src={school.logoUrl} className="w-full h-full object-contain" /> : <i className="fas fa-school text-slate-300 dark:text-slate-500"></i>}
+                                {school.logo_url ? <img src={school.logo_url} className="w-full h-full object-contain" /> : <i className="fas fa-school text-slate-300 dark:text-slate-500"></i>}
                             </div>
                             <input type="file" accept="image/*" onChange={handleLogoUpload} className="text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:bg-indigo-600" />
                         </div>
@@ -311,7 +333,6 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                 </div>
            </div>
 
-           {/* Live Preview Panel - Keeps paper white context */}
            <div className="flex-1 bg-slate-200 dark:bg-slate-900 rounded-2xl p-8 overflow-y-auto flex justify-center items-start shadow-inner border dark:border-slate-700">
                 <div 
                     className="bg-white shadow-2xl transition-all duration-300"
@@ -325,17 +346,16 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                         color: themeColor
                     }}
                 >
-                    {/* Live Header Preview */}
                     <div className="border-b-2 pb-6 mb-8" style={{ borderColor: themeColor }}>
                         {headerLayout === 'CENTER' ? (
                             <div className="text-center">
-                                {school.logoUrl && <img src={school.logoUrl} className="h-16 mx-auto mb-2" />}
+                                {school.logo_url && <img src={school.logo_url} className="h-16 mx-auto mb-2" />}
                                 <h1 className="text-3xl font-extrabold uppercase mb-1">{school.name}</h1>
                                 <p className="font-bold text-lg opacity-80">First Term Examination 2024</p>
                             </div>
                         ) : (
                              <div className="flex items-center gap-6">
-                                {school.logoUrl && <img src={school.logoUrl} className="h-24 w-24 object-contain" />}
+                                {school.logo_url && <img src={school.logo_url} className="h-24 w-24 object-contain" />}
                                 <div>
                                     <h1 className="text-3xl font-extrabold uppercase mb-1">{school.name}</h1>
                                     <p className="font-bold text-lg opacity-80">First Term Examination 2024</p>
@@ -362,15 +382,6 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                                 <span>D. Option</span>
                             </div>
                         </div>
-                         <div>
-                            <p className="mb-2">2. Another sample question to test readability.</p>
-                            <div className="grid grid-cols-4 gap-4 text-sm ml-4">
-                                <span>A. Option</span>
-                                <span>B. Option</span>
-                                <span>C. Option</span>
-                                <span>D. Option</span>
-                            </div>
-                        </div>
                     </div>
 
                     <div className="mt-20 pt-4 border-t text-center text-sm opacity-60" style={{ borderColor: themeColor }}>
@@ -383,7 +394,6 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
 
       {activeTab === 'TEACHERS' && (
          <div className="max-w-5xl mx-auto">
-            {/* Add Teacher Card */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-8 overflow-hidden">
                 <div 
                     onClick={() => setShowAddForm(!showAddForm)}
@@ -406,16 +416,10 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                             </div>
                         )}
 
-                        {/* Auto Generate Teachers Section */}
                         <div className="mb-8 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl">
                             <h4 className="font-bold text-purple-800 dark:text-purple-300 mb-4 flex items-center">
                                 <i className="fas fa-robot mr-2"></i> Auto-Generate Subject Teachers
                             </h4>
-                            <p className="text-sm text-purple-600 dark:text-purple-200 mb-4">
-                                Quickly create accounts for specific subject teachers across multiple classes.
-                                (e.g., Creates "Maths JSS1", "Maths JSS2" accounts).
-                            </p>
-                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                                 <div>
                                     <label className="block text-sm font-bold mb-2 text-slate-700 dark:text-slate-300">Select Subject</label>
@@ -449,14 +453,13 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                                     <div className="max-h-40 overflow-y-auto">
                                         <table className="w-full text-sm text-left">
                                             <thead className="text-xs text-slate-500 border-b dark:border-slate-700">
-                                                <tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Email</th><th className="px-4 py-2">Password</th></tr>
+                                                <tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Email</th></tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                                 {generatedPreview.map((p, idx) => (
                                                     <tr key={idx}>
                                                         <td className="px-4 py-2 dark:text-white">{p.name}</td>
                                                         <td className="px-4 py-2 text-slate-600 dark:text-slate-400 font-mono text-xs">{p.email}</td>
-                                                        <td className="px-4 py-2 text-slate-600 dark:text-slate-400 font-mono text-xs">{p.password}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -482,34 +485,6 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                             </div>
                         </div>
                         
-                        {/* Bulk Upload Section */}
-                        <div className="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl">
-                            <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2"><i className="fas fa-file-csv mr-2"></i> Bulk Upload CSV</h4>
-                            <p className="text-sm text-blue-600 dark:text-blue-200 mb-4">Upload a CSV file to create multiple accounts at once. <br/>Format: <code>Name, Email, Password, Subjects(pipe separated), Classes(pipe separated)</code></p>
-                            <div className="flex gap-4">
-                                <input 
-                                    type="file" 
-                                    accept=".csv"
-                                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                                    className="block w-full text-sm text-slate-500
-                                      file:mr-4 file:py-2 file:px-4
-                                      file:rounded-full file:border-0
-                                      file:text-sm file:font-semibold
-                                      file:bg-blue-100 file:text-blue-700
-                                      hover:file:bg-blue-200
-                                      dark:file:bg-blue-900 dark:file:text-blue-300
-                                    "
-                                />
-                                <button 
-                                    onClick={handleBulkUpload}
-                                    disabled={!csvFile}
-                                    className="px-6 py-2 bg-blue-600 text-white font-bold rounded-full disabled:opacity-50 hover:bg-blue-700 transition-colors shadow-sm"
-                                >
-                                    Upload & Create
-                                </button>
-                            </div>
-                        </div>
-
                         <div className="border-t pt-6 dark:border-slate-700 mt-6">
                             <h4 className="font-bold text-slate-800 dark:text-white mb-4">Manual Entry</h4>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -543,66 +518,20 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                                             value={newTeacherPassword}
                                             onChange={e => setNewTeacherPassword(e.target.value)}
                                         />
-                                        <button 
-                                            onClick={generatePassword}
-                                            className="bg-slate-100 dark:bg-slate-700 px-4 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300"
-                                            title="Generate Password"
-                                        >
+                                        <button onClick={generatePassword} className="bg-slate-100 dark:bg-slate-700 px-4 rounded-lg border border-slate-300 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300">
                                             <i className="fas fa-random"></i>
                                         </button>
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="mb-6">
-                                <label className="block text-sm font-bold mb-3 text-slate-700 dark:text-slate-300">Classes Taught</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {SCHOOL_CLASSES.map(cls => (
-                                        <button
-                                            key={cls}
-                                            onClick={() => toggleClass(cls)}
-                                            className={`px-4 py-2 rounded-full text-sm font-bold border transition-all ${selectedClasses.has(cls) ? 'bg-primary text-white border-primary' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-                                        >
-                                            {cls}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="mb-8">
-                                <label className="block text-sm font-bold mb-3 text-slate-700 dark:text-slate-300">Subjects</label>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-h-48 overflow-y-auto p-4 border dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900">
-                                    {NIGERIAN_SUBJECTS.map(sub => (
-                                        <label key={sub} className="flex items-center gap-2 cursor-pointer hover:bg-white dark:hover:bg-slate-800 p-2 rounded transition-colors">
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${selectedSubjects.has(sub) ? 'bg-primary border-primary' : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-500'}`}>
-                                                {selectedSubjects.has(sub) && <i className="fas fa-check text-xs text-white"></i>}
-                                            </div>
-                                            <input 
-                                                type="checkbox" 
-                                                className="hidden" 
-                                                checked={selectedSubjects.has(sub)}
-                                                onChange={() => toggleSubject(sub)}
-                                            />
-                                            <span className={`text-sm ${selectedSubjects.has(sub) ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{sub}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end">
-                                <button 
-                                    onClick={handleAddTeacher}
-                                    className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow hover:bg-indigo-700 transition-colors"
-                                >
-                                    <i className="fas fa-plus mr-2"></i> Create Teacher Account
-                                </button>
-                            </div>
+                            <button onClick={handleAddTeacher} className="px-8 py-3 bg-primary text-white font-bold rounded-xl shadow hover:bg-indigo-700 transition-colors">
+                                <i className="fas fa-plus mr-2"></i> Create Teacher Account
+                            </button>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* Teachers List */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="p-4 border-b dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 flex justify-between items-center">
                     <h3 className="font-bold text-slate-700 dark:text-slate-200">Staff List ({teachers.length})</h3>
@@ -611,7 +540,7 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                     <thead className="bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs uppercase font-bold tracking-wider border-b dark:border-slate-700">
                         <tr>
                             <th className="p-4">Teacher Info</th>
-                            <th className="p-4">Classes</th>
+                            <th className="p-4">Credits</th>
                             <th className="p-4">Subjects</th>
                             <th className="p-4 text-right">Action</th>
                         </tr>
@@ -624,13 +553,13 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                                     <div className="text-xs text-slate-500 dark:text-slate-400">{t.email}</div>
                                 </td>
                                 <td className="p-4">
-                                    <div className="flex flex-wrap gap-1">
-                                        {t.classes?.map(c => <span key={c} className="text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-800">{c}</span>) || '-'}
-                                    </div>
+                                    <span className={`text-xs font-black ${t.tokens > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                                        {t.tokens} AI Tokens
+                                    </span>
                                 </td>
                                 <td className="p-4">
-                                     <div className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2" title={t.subjects.join(', ')}>
-                                        {t.subjects.join(', ')}
+                                     <div className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">
+                                        {t.subjects.join(', ') || 'No subjects assigned'}
                                      </div>
                                 </td>
                                 <td className="p-4 text-right">
@@ -640,9 +569,6 @@ export const SchoolSettings: React.FC<SchoolSettingsProps> = ({ currentUser, onB
                                 </td>
                             </tr>
                         ))}
-                        {teachers.length === 0 && (
-                            <tr><td colSpan={4} className="p-8 text-center text-slate-400">No teachers added yet.</td></tr>
-                        )}
                     </tbody>
                 </table>
             </div>

@@ -1,27 +1,36 @@
 
-import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { Question, QuestionType, ExamSection, Difficulty, BloomsLevel, ExamPaper, ComplianceReport } from "../types";
+import { GoogleGenAI, Type } from "@google/genai";
+import { Question, QuestionType, ExamSection, Difficulty, BloomsLevel, ExamPaper, UsageLog } from "../types";
+import { trackAIUsage, getSystemConfig, getCurrentUser, deductToken, getBalance } from "./storageService";
 
-// Using gemini-3-pro-preview as requested for high reasoning capabilities
-const MODEL_NAME = "gemini-3-pro-preview";
-const FAST_MODEL = "gemini-2.5-flash"; // For quick edits
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// Define the schema for structured output to ensure reliable parsing
-const questionSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    text: { type: Type.STRING },
-    type: { type: Type.STRING, enum: ["OBJ", "FILL", "THEORY"] },
-    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-    correctAnswer: { type: Type.STRING },
-    marks: { type: Type.NUMBER },
-  },
-  required: ["text", "type"],
+// Helper to get fresh AI instance with current Master Key
+const getAI = () => {
+    const config = getSystemConfig();
+    const apiKey = config.gemini_api_key || process.env.API_KEY;
+    if (!apiKey) throw new Error("API Key not configured. Please contact admin.");
+    return new GoogleGenAI({ apiKey });
 };
 
-const examSectionSchema: Schema = {
+const MODEL_PRO = "gemini-3-pro-preview";
+const MODEL_FLASH = "gemini-3-flash-preview";
+
+const checkLimit = () => {
+    const user = getCurrentUser();
+    if (!user) throw new Error("User session expired.");
+    
+    // Deduct token for AI operation
+    const hasToken = deductToken(user.id, 1);
+    if (!hasToken) {
+        throw new Error("Insufficient AI Tokens. Please top-up or switch your plan to continue using AI features.");
+    }
+};
+
+const logUsage = (feature: UsageLog['feature'], model: string) => {
+    const user = getCurrentUser();
+    if (user) trackAIUsage(user.id, user.school_id, feature, model);
+};
+
+const examSectionSchema = {
   type: Type.ARRAY,
   items: {
     type: Type.OBJECT,
@@ -30,7 +39,17 @@ const examSectionSchema: Schema = {
       instructions: { type: Type.STRING },
       questions: {
         type: Type.ARRAY,
-        items: questionSchema,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            text: { type: Type.STRING },
+            type: { type: Type.STRING, enum: ["OBJ", "FILL", "THEORY"] },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+            correct_answer: { type: Type.STRING },
+            marks: { type: Type.NUMBER },
+          },
+          required: ["text", "type"],
+        },
       },
     },
     required: ["title", "questions"],
@@ -38,219 +57,159 @@ const examSectionSchema: Schema = {
 };
 
 export const generateQuestionsFromAI = async (
-  subject: string,
-  topic: string,
-  difficulty: string,
-  qType: string,
-  count: number,
-  lessonPlan?: string
+  subject: string, topic: string, difficulty: string, qType: string, count: number, lessonPlan?: string
 ): Promise<ExamSection[]> => {
+  checkLimit();
   try {
-    let prompt = `Act as a professional teacher in a Nigerian school. Create an exam section for Subject: ${subject}, Topic: ${topic}, Difficulty: ${difficulty}.
-    
-    Context:
-    - The questions must strictly follow the Nigerian School Curriculum (UBE/WAEC/NECO standards).
-    - Ensure cultural relevance to Nigeria where applicable (e.g., use Nigerian names like Emeka, Musa, Tolu, or local cities/context).
-    - Language should be formal British English as used in Nigerian education.
+    const ai = getAI();
+    logUsage('GENERATION', MODEL_PRO);
 
-    Generate ${count} questions of type ${qType}.
-    If type is OBJ (Objective), provide 4 options (A-D) and the correct answer.`;
-
-    if (lessonPlan) {
-      prompt += `\n\nUse the following Teacher's Lesson Plan / Notes to tailor the questions specifically to what was taught:\n"${lessonPlan}"\n`;
-    }
-
-    prompt += `\nReturn the result as a list of sections (usually just one, but strict format).`;
+    let prompt = `Professional Teacher (Nigeria). Create ${count} questions (Subject: ${subject}, Topic: ${topic}, Difficulty: ${difficulty}, Type: ${qType}). Cultural Context: Nigeria.`;
+    if (lessonPlan) prompt += ` Specific context: ${lessonPlan}`;
 
     const response = await ai.models.generateContent({
-      model: MODEL_NAME,
+      model: MODEL_PRO,
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: examSectionSchema,
-        thinkingConfig: { thinkingBudget: 2048 }, // Increased thinking budget for context integration
+        thinkingConfig: { thinkingBudget: 2048 },
       },
     });
 
-    if (response.text) {
-      const data = JSON.parse(response.text);
-      // Map to internal ID structure
+    const text = response.text;
+    if (text) {
+      const data = JSON.parse(text);
       return data.map((section: any) => ({
         ...section,
         id: crypto.randomUUID(),
-        questions: section.questions.map((q: any) => ({
-          ...q,
-          id: crypto.randomUUID(),
-        })),
+        questions: section.questions.map((q: any) => ({ ...q, id: crypto.randomUUID() })),
       }));
     }
-    throw new Error("No data returned from AI");
-  } catch (error) {
-    console.error("AI Generation Error:", error);
-    throw error;
+    throw new Error("Empty response");
+  } catch (error: any) {
+    console.error(error); throw error;
   }
 };
 
 export const ocrFromImage = async (base64Image: string, mimeType: string = "image/jpeg"): Promise<ExamSection[]> => {
+  checkLimit();
   try {
-    const prompt = `Analyze this image of a handwritten exam. 
-    1. Extract all questions.
-    2. Correct any spelling or grammar errors (Standard British English).
-    3. Categorize them into sections if apparent, otherwise create a "General" section.
-    4. Determine the question type (OBJ, FILL, THEORY) automatically.
-    5. Output strictly in the requested JSON format.`;
+    const ai = getAI();
+    logUsage('OCR', MODEL_PRO);
 
     const response = await ai.models.generateContent({
-      model: MODEL_NAME,
+      model: MODEL_PRO,
       contents: {
         parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Image,
-            },
-          },
-          { text: prompt },
+          { inlineData: { mimeType, data: base64Image } },
+          { text: "Convert handwritten exam image to structured JSON sections." }
         ],
       },
       config: {
         responseMimeType: "application/json",
         responseSchema: examSectionSchema,
-         thinkingConfig: { thinkingBudget: 2048 }, // Higher budget for OCR analysis
+        thinkingConfig: { thinkingBudget: 2048 },
       },
     });
 
-    if (response.text) {
-      const data = JSON.parse(response.text);
+    const text = response.text;
+    if (text) {
+      const data = JSON.parse(text);
       return data.map((section: any) => ({
         ...section,
         id: crypto.randomUUID(),
-        questions: section.questions.map((q: any) => ({
-          ...q,
-          id: crypto.randomUUID(),
-        })),
+        questions: section.questions.map((q: any) => ({ ...q, id: crypto.randomUUID() })),
       }));
     }
-    throw new Error("No data returned from OCR");
-  } catch (error) {
-    console.error("OCR Error:", error);
-    throw error;
+    throw new Error("OCR Failed");
+  } catch (error: any) {
+    console.error(error); throw error;
   }
 };
 
-export const refineQuestionText = async (text: string, instruction: "FIX" | "REWRITE" | "MARKING"): Promise<string> => {
-    // Simpler call for individual text edits
-    const prompt = instruction === "FIX" ? `Fix formatting and spelling (British English/Nigerian Context): ${text}` :
-                   instruction === "REWRITE" ? `Rewrite this question to be more clear, professional, and standard for Nigerian schools: ${text}` :
-                   `Generate a brief marking scheme answer for: ${text}`;
-    
+export const refineQuestionText = async (text: string, instruction: string): Promise<string> => {
+    checkLimit();
+    const ai = getAI();
+    logUsage('REFINEMENT', MODEL_FLASH);
     const response = await ai.models.generateContent({
-        model: FAST_MODEL,
-        contents: prompt
+        model: MODEL_FLASH,
+        contents: `${instruction}: ${text}`
     });
-
     return response.text || text;
 };
 
-// --- Advanced AI Features ---
-
-export const analyzeQuestionMetadata = async (text: string): Promise<{ difficulty: Difficulty, blooms: BloomsLevel }> => {
-    const prompt = `Analyze this exam question: "${text}".
-    Determine the Difficulty Level (Easy, Medium, Hard) and Bloom's Taxonomy Level (Remember, Understand, Apply, Analyze, Evaluate, Create).
-    Return JSON format: { "difficulty": "Medium", "blooms": "Apply" }`;
-
+export const analyzeQuestionMetadata = async (text: string) => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: FAST_MODEL,
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-
-    if(response.text) {
-        return JSON.parse(response.text);
-    }
-    return { difficulty: Difficulty.MEDIUM, blooms: BloomsLevel.REMEMBER };
-};
-
-export const spinQuestion = async (question: Question, mode: "HARDER" | "CONTEXT" | "TYPE_SWAP"): Promise<Question> => {
-    let instruction = "";
-    if (mode === "HARDER") instruction = "Rewrite this question to require higher-order thinking (Analyze/Evaluate).";
-    if (mode === "CONTEXT") instruction = "Rewrite this question using Nigerian cultural context (names, places, food, scenarios).";
-    if (mode === "TYPE_SWAP") instruction = question.type === QuestionType.OBJECTIVE ? "Convert this to a Fill-in-the-blank question." : "Convert this to a Multiple Choice question with 4 options.";
-
-    const prompt = `Original Question: ${JSON.stringify(question)}.
-    Instruction: ${instruction}
-    Return the result in the exact same JSON structure as the original question (including type, options, etc.).`;
-
-    const response = await ai.models.generateContent({
-        model: MODEL_NAME,
-        contents: prompt,
-        config: { 
+        model: MODEL_FLASH,
+        contents: `Analyze difficulty/Bloom level for: ${text}`,
+        config: {
             responseMimeType: "application/json",
-            responseSchema: questionSchema 
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    difficulty: { type: Type.STRING },
+                    bloomsLevel: { type: Type.STRING }
+                }
+            }
         }
     });
-
-    if(response.text) {
-        const q = JSON.parse(response.text);
-        return { ...question, ...q, id: question.id }; // Keep ID, update content
-    }
-    return question;
+    return response.text ? JSON.parse(response.text) : { difficulty: 'Medium', bloomsLevel: 'Understand' };
 };
 
-export const improveDistractors = async (question: Question): Promise<string[]> => {
-    if (question.type !== QuestionType.OBJECTIVE || !question.options) return [];
-
-    const prompt = `Analyze this multiple choice question: "${question.text}".
-    Correct Answer: "${question.correctAnswer || 'Unknown'}".
-    Current Options: ${JSON.stringify(question.options)}.
-    
-    Task: Generate 3 plausible but incorrect distractors based on common student misconceptions. 
-    Return ONLY a JSON array of 4 strings (1 correct answer + 3 improved distractors). Ensure the correct answer is included.`;
-
+export const spinQuestion = async (text: string) => {
+    checkLimit();
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: MODEL_NAME,
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
+        model: MODEL_FLASH,
+        contents: `Rewrite: ${text}`
     });
-
-    if(response.text) {
-        return JSON.parse(response.text);
-    }
-    return question.options || [];
+    return response.text || text;
 };
 
-export const generateRubric = async (question: Question): Promise<string> => {
-    const prompt = `Generate a detailed marking rubric for this ${question.subject || 'General'} theory question: "${question.text}".
-    Marks: ${question.marks}.
-    Structure it with criteria and score bands.`;
-
+export const improveDistractors = async (text: string, options: string[]) => {
+    checkLimit();
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: MODEL_NAME,
-        contents: prompt
+        model: MODEL_PRO,
+        contents: `Better options for MC Question: ${text}. Current: ${options.join(',')}`,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
+        }
     });
-
-    return response.text || "No rubric generated.";
+    return response.text ? JSON.parse(response.text) : options;
 };
 
-export const runComplianceCheck = async (paper: ExamPaper): Promise<ComplianceReport> => {
-    const prompt = `Act as an Exam Officer. Audit this exam paper JSON against these rules:
-    1. Must have clear instructions.
-    2. Must be balanced in difficulty.
-    3. Maximum 50 OBJ questions.
-    4. Theory section must have at least 2 questions.
-    
-    Paper Data: ${JSON.stringify(paper.sections)}
-    
-    Return JSON: { "score": number (0-100), "issues": ["string"], "suggestions": ["string"] }`;
-
+export const generateRubric = async (text: string) => {
+    checkLimit();
+    const ai = getAI();
     const response = await ai.models.generateContent({
-        model: MODEL_NAME,
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
+        model: MODEL_PRO,
+        contents: `Marking guide for: ${text}`
     });
+    return response.text || "";
+};
 
-    if(response.text) {
-        return JSON.parse(response.text);
-    }
-    return { score: 0, issues: ["Failed to run analysis"], suggestions: [] };
+export const runComplianceCheck = async (paper: ExamPaper) => {
+    checkLimit();
+    const ai = getAI();
+    logUsage('COMPLIANCE', MODEL_PRO);
+    const response = await ai.models.generateContent({
+        model: MODEL_PRO,
+        contents: `Evaluate Nigerian compliance: ${JSON.stringify(paper.sections)}`,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    score: { type: Type.NUMBER },
+                    feedback: { type: Type.STRING }
+                },
+                required: ["score", "feedback"]
+            }
+        }
+    });
+    return response.text ? JSON.parse(response.text) : { score: 0, feedback: "Error" };
 };

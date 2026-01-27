@@ -15,8 +15,8 @@ export const QRSummarySheet: React.FC<QRSummarySheetProps> = ({ currentUser, onN
   const [selectedSubject, setSelectedSubject] = useState('');
   
   useEffect(() => {
-    // Get all papers for the school
-    const all = getExamPapers(currentUser.schoolId);
+    // Fix: Using school_id to match types.ts
+    const all = getExamPapers(currentUser.school_id);
     setPapers(all);
   }, [currentUser]);
 
@@ -29,7 +29,8 @@ export const QRSummarySheet: React.FC<QRSummarySheetProps> = ({ currentUser, onN
     window.print();
   };
 
-  const school = getSchool(currentUser.schoolId);
+  // Fix: Using school_id to match types.ts
+  const school = getSchool(currentUser.school_id);
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 font-sans transition-colors">
@@ -76,7 +77,8 @@ export const QRSummarySheet: React.FC<QRSummarySheetProps> = ({ currentUser, onN
       {/* Printable Area */}
       <div id="printable-content" className="p-8 max-w-[210mm] mx-auto bg-white min-h-screen text-black">
         <div className="text-center mb-8 border-b-2 border-black pb-4">
-             {school?.logoUrl && <img src={school.logoUrl} alt="Logo" className="h-16 mx-auto mb-2" />}
+             {/* Fix: Using logo_url to match types.ts */}
+             {school?.logo_url && <img src={school.logo_url} alt="Logo" className="h-16 mx-auto mb-2" />}
              <h1 className="text-2xl font-black uppercase">{school?.name || "School Name"}</h1>
              <h2 className="text-lg font-bold">Exam Digital Access Codes</h2>
              <p className="text-sm mt-1">Class: {selectedClass || 'All'} | Subject: {selectedSubject || 'All'} | Session: {new Date().getFullYear()}</p>

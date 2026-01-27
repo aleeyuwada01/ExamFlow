@@ -6,14 +6,16 @@ import { Preview } from './Preview';
 import { Auth } from './Auth';
 import { SchoolSettings } from './SchoolSettings';
 import { ReviewDashboard } from './ReviewDashboard';
+import { AdminDashboard } from './AdminDashboard';
+import { PricingPage } from './PricingPage';
 import { SnapToText } from './inputs/SnapToText';
 import { AIGenerator } from './inputs/AIGenerator';
 import { QuestionBank } from './inputs/QuestionBank';
 import { QRScanner } from './QRScanner';
 import { QRSummarySheet } from './QRSummarySheet';
 import { LandingPage } from './LandingPage';
-import { ExamPaper, ExamSection, ViewState, User, ExamStatus } from '../types';
-import { getCurrentUser, logoutUser, getSchool, getPaperByQR, saveTheme, getTheme, saveExamPaper } from '../services/storageService';
+import { ExamPaper, ExamSection, ViewState, User, ExamStatus, UserRole } from '../types';
+import { getCurrentUser, logoutUser, getSchool, getPaperByQR, saveTheme, getTheme, saveExamPaper, recordActivity } from '../services/storageService';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -22,21 +24,15 @@ const App: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
-    // Auth Check
     const user = getCurrentUser();
     if (user) {
       setCurrentUser(user);
-      setCurrentView('DASHBOARD');
+      setCurrentView(user.role === UserRole.SUPER_ADMIN ? 'ADMIN_DASHBOARD' : 'DASHBOARD');
     }
 
-    // Theme Check
     const savedTheme = getTheme();
     setIsDarkMode(savedTheme === 'dark');
-    if (savedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-    } else {
-        document.documentElement.classList.remove('dark');
-    }
+    if (savedTheme === 'dark') document.documentElement.classList.add('dark');
   }, []);
 
   const toggleTheme = () => {
@@ -53,7 +49,7 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    setCurrentView('DASHBOARD');
+    setCurrentView(user.role === UserRole.SUPER_ADMIN ? 'ADMIN_DASHBOARD' : 'DASHBOARD');
   };
 
   const handleLogout = () => {
@@ -63,121 +59,88 @@ const App: React.FC = () => {
     setPaper(null);
   };
 
-  const createNewPaper = () => {
-    if (!currentUser) return undefined;
-    const school = getSchool(currentUser.schoolId);
-    
-    // Create new blank paper
-    const newPaper: ExamPaper = {
-      id: crypto.randomUUID(),
-      schoolId: currentUser.schoolId,
-      authorId: currentUser.id,
-      authorName: currentUser.name,
-      status: ExamStatus.DRAFT,
-      createdAt: Date.now(),
-      qrCodeData: `EXAM-${crypto.randomUUID()}`,
-      header: {
-        schoolName: school?.name || "School Name",
-        className: "JSS 1",
-        subject: currentUser.subjects[0] || "Mathematics",
-        term: "First Term",
-        duration: "1 Hour",
-        examType: "Continuous Assessment",
-        generalInstructions: "Answer all questions.",
-      },
-      sections: []
-    };
-    setPaper(newPaper);
-    // Also save initial draft immediately
-    saveExamPaper(newPaper);
-    return newPaper;
-  };
-
   const handleInputSuccess = (newSections: ExamSection[]) => {
-    // Use current state or create new if null
-    let updatedPaper = paper;
-    
-    if (!updatedPaper) {
-        updatedPaper = createNewPaper() || null;
-    }
-
-    if (updatedPaper) {
+    try {
+        let updatedPaper = paper;
+        if (!updatedPaper) {
+            const school = getSchool(currentUser!.school_id);
+            updatedPaper = {
+                id: crypto.randomUUID(),
+                school_id: currentUser!.school_id,
+                author_id: currentUser!.id,
+                author_name: currentUser!.name,
+                status: ExamStatus.DRAFT,
+                created_at: Date.now(),
+                updated_at: Date.now(),
+                qr_code_data: `EXAM-${crypto.randomUUID()}`,
+                header: {
+                  school_name: school?.name || "School Name",
+                  class_name: "JSS 1",
+                  subject: currentUser!.subjects[0] || "Mathematics",
+                  term: "First Term",
+                  duration: "1 Hour",
+                  exam_type: "Continuous Assessment",
+                  general_instructions: "Answer all questions.",
+                },
+                sections: []
+            };
+        }
+        
         const newPaperState = {
              ...updatedPaper,
-             sections: [...updatedPaper.sections, ...newSections]
+             sections: [...updatedPaper.sections, ...newSections],
+             updated_at: Date.now()
         };
         setPaper(newPaperState);
-        saveExamPaper(newPaperState); // Auto-save immediately
+        saveExamPaper(newPaperState, true); 
+        setCurrentView('EDITOR');
+    } catch (e: any) {
+        if (e.message.includes("Insufficient AI Tokens")) {
+            window.dispatchEvent(new CustomEvent('ai-tokens-exhausted'));
+            setCurrentView('DASHBOARD');
+        } else {
+            alert(e.message || "An error occurred.");
+        }
     }
-    
-    setCurrentView('EDITOR');
   };
 
-  const handleEditPaper = (p: ExamPaper) => {
-      setPaper(p);
-      setCurrentView('EDITOR');
-  };
-
-  const handleQRScan = (data: string) => {
-      const foundPaper = getPaperByQR(data);
-      if (foundPaper) {
-          setPaper(foundPaper);
-          setCurrentView('EDITOR'); // Or PREVIEW, depending on preference
-      } else {
-          alert("Paper not found for this QR code.");
-          setCurrentView('DASHBOARD');
-      }
-  };
-
-  // Router
   const renderView = () => {
-    // If NOT logged in, allow specific public views or auth
     if (!currentUser) {
         if (currentView === 'AUTH') return <Auth onLogin={handleLogin} />;
+        if (currentView === 'PRICING') return <PricingPage onBack={() => setCurrentView('LANDING')} onSelectPlan={() => setCurrentView('AUTH')} />;
         return <LandingPage onGetStarted={() => setCurrentView('AUTH')} onLogin={() => setCurrentView('AUTH')} />;
     }
 
     switch (currentView) {
-      case 'AUTH':
-        // If logged in, auth redirects to dashboard
-        return <Dashboard currentUser={currentUser} onNavigate={setCurrentView} onLogout={handleLogout} onEditPaper={handleEditPaper} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />;
-      case 'LANDING':
-         // Logged in users shouldn't really see landing, but if they do, redirect to dashboard
-         return <Dashboard currentUser={currentUser} onNavigate={setCurrentView} onLogout={handleLogout} onEditPaper={handleEditPaper} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />;
+      case 'ADMIN_DASHBOARD':
+        return <AdminDashboard onBack={handleLogout} />;
       case 'DASHBOARD':
-        return (
-            <Dashboard 
-                currentUser={currentUser} 
-                onNavigate={setCurrentView} 
-                onLogout={handleLogout} 
-                onEditPaper={handleEditPaper} 
-                isDarkMode={isDarkMode}
-                toggleTheme={toggleTheme}
-            />
-        );
+        return <Dashboard currentUser={currentUser} onNavigate={setCurrentView} onLogout={handleLogout} onEditPaper={(p) => { setPaper(p); setCurrentView('EDITOR'); }} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />;
+      case 'PRICING':
+        return <PricingPage onBack={() => setCurrentView('DASHBOARD')} onSelectPlan={() => setCurrentView('DASHBOARD')} />;
       case 'SNAP_INPUT':
-        if(!paper) createNewPaper();
         return <SnapToText onSuccess={handleInputSuccess} onCancel={() => setCurrentView('DASHBOARD')} />;
       case 'AI_INPUT':
-        if(!paper) createNewPaper();
         return <AIGenerator onSuccess={handleInputSuccess} onCancel={() => setCurrentView('DASHBOARD')} />;
       case 'BANK_INPUT':
-        if(!paper) createNewPaper();
         return <QuestionBank onSuccess={handleInputSuccess} onCancel={() => setCurrentView('DASHBOARD')} />;
       case 'EDITOR':
-        return paper ? <ExamEditor paper={paper} currentUser={currentUser} setPaper={(p) => setPaper(p as ExamPaper)} onNavigate={setCurrentView} /> : <Dashboard currentUser={currentUser} onNavigate={setCurrentView} onLogout={handleLogout} onEditPaper={handleEditPaper} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />;
+        return paper ? <ExamEditor paper={paper} currentUser={currentUser} setPaper={(p) => setPaper(p as ExamPaper)} onNavigate={setCurrentView} /> : null;
       case 'PREVIEW':
         return paper ? <Preview paper={paper} onNavigate={setCurrentView} currentUser={currentUser} /> : null;
       case 'SETTINGS':
         return <SchoolSettings currentUser={currentUser} onBack={() => setCurrentView('DASHBOARD')} />;
       case 'REVIEW':
-        return <ReviewDashboard currentUser={currentUser} onNavigate={() => setCurrentView('DASHBOARD')} onEditPaper={handleEditPaper} />;
+        return <ReviewDashboard currentUser={currentUser} onNavigate={() => setCurrentView('DASHBOARD')} onEditPaper={(p) => { setPaper(p); setCurrentView('EDITOR'); }} />;
       case 'SCAN':
-        return <QRScanner onScan={handleQRScan} onCancel={() => setCurrentView('DASHBOARD')} />;
+        return <QRScanner onScan={(data) => {
+            const found = getPaperByQR(data);
+            if (found) { setPaper(found); setCurrentView('EDITOR'); } else alert("Not found");
+        }} onCancel={() => setCurrentView('DASHBOARD')} />;
       case 'QR_SUMMARY':
         return <QRSummarySheet currentUser={currentUser} onNavigate={() => setCurrentView('DASHBOARD')} />;
       default:
-        return <Dashboard currentUser={currentUser} onNavigate={setCurrentView} onLogout={handleLogout} onEditPaper={handleEditPaper} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />;
+        return <Dashboard currentUser={currentUser} onNavigate={setCurrentView} onLogout={handleLogout} onEditPaper={(p) => { setPaper(p); setCurrentView('EDITOR'); }} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />;
     }
   };
 

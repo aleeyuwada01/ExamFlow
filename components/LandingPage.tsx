@@ -1,5 +1,7 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { getSystemConfig } from '../services/storageService';
+import { SystemConfig } from '../types';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -7,10 +9,24 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
+  const [config, setConfig] = useState<SystemConfig>(getSystemConfig());
+
+  useEffect(() => {
+    setConfig(getSystemConfig());
+  }, []);
+
+  const scrollToPricing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const element = document.getElementById('pricing');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-700 overflow-x-hidden">
       {/* Navbar */}
-      <nav className="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center relative z-20">
+      <nav className="max-w-7xl mx-auto px-6 py-6 flex justify-between items-center relative z-50">
         <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-200">
                 <i className="fas fa-layer-group"></i>
@@ -18,7 +34,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
             <span className="text-xl font-extrabold tracking-tight hidden md:block">ExamFlow AI</span>
             <span className="text-xl font-extrabold tracking-tight md:hidden">ExamFlow</span>
         </div>
-        <div className="flex gap-4">
+        <div className="flex items-center gap-6">
+            <button onClick={scrollToPricing} className="text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors hidden md:block">Pricing</button>
             <button onClick={onLogin} className="text-slate-600 font-bold hover:text-indigo-600 transition-colors">
                 Log In
             </button>
@@ -29,7 +46,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
       </nav>
 
       {/* Hero Section */}
-      <header className="relative max-w-7xl mx-auto px-6 pt-6 pb-16 md:pt-20 md:pb-32 grid grid-cols-1 md:grid-cols-2 gap-12 items-center overflow-hidden md:overflow-visible">
+      <header className="relative max-w-7xl mx-auto px-6 pt-6 pb-16 md:pt-20 md:pb-32 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
         <div className="space-y-8 relative z-10 order-2 md:order-1">
             <div className="inline-block px-4 py-1.5 bg-amber-100 text-amber-800 text-xs font-bold uppercase tracking-wider rounded-full">
                 For Nigerian Schools 🇳🇬
@@ -48,172 +65,183 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
                     <i className="fas fa-sign-in-alt"></i> School Login
                 </button>
             </div>
-            <p className="text-sm text-slate-400 flex items-center gap-2">
-                <i className="fas fa-check-circle text-green-500"></i> No credit card required
-                <span className="mx-2">•</span>
-                <i className="fas fa-check-circle text-green-500"></i> Works on Phone & Laptop
-            </p>
         </div>
         
         <div className="relative order-1 md:order-2">
-            {/* Visual Abstract - Blobs constrained within header on mobile */}
-            <div className="absolute top-10 right-10 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-            <div className="absolute bottom-10 left-10 w-72 h-72 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-            
-            <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 p-4 md:p-6 transform rotate-2 hover:rotate-0 transition-transform duration-500 mx-auto max-w-sm md:max-w-none">
+            <div className="absolute top-10 right-10 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+            {/* HERO CARD - RESTORED ORIGINAL VIBE */}
+            <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 transform rotate-2 mx-auto max-w-sm">
                 <div className="flex items-center justify-between mb-6 border-b pb-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600"><i className="fas fa-graduation-cap"></i></div>
+                        <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 shadow-inner">
+                            <i className="fas fa-graduation-cap"></i>
+                        </div>
                         <div>
-                            <div className="font-bold text-lg">JSS 2 Basic Science</div>
-                            <div className="text-xs text-slate-500">Generated by AI • 2 mins ago</div>
+                            <div className="font-black text-slate-900 text-lg leading-none">JSS 2 Basic Science</div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">First Term Examination</div>
                         </div>
                     </div>
-                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded">READY</span>
+                    <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-1 rounded uppercase tracking-tighter shadow-sm border border-emerald-200">READY</span>
                 </div>
-                <div className="space-y-4">
-                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                        <span className="text-xs font-bold text-slate-400">Question 1 (OBJ)</span>
-                        <p className="font-medium text-slate-800 mt-1">Which of the following is a non-living thing?</p>
-                        <div className="grid grid-cols-2 gap-2 mt-2">
-                            <div className="text-xs bg-white p-2 rounded border text-slate-500">A. Goat</div>
-                            <div className="text-xs bg-white p-2 rounded border text-slate-500">B. Tree</div>
-                            <div className="text-xs bg-indigo-50 p-2 rounded border border-indigo-200 text-indigo-700 font-bold">C. Stone <i className="fas fa-check ml-1"></i></div>
-                            <div className="text-xs bg-white p-2 rounded border text-slate-500">D. Bird</div>
+                <div className="space-y-6">
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 shadow-sm">
+                        <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Question 1</span>
+                        <p className="font-bold text-slate-800 text-sm mt-1 leading-snug">Which of these is a biotic factor in a Nigerian forest ecosystem?</p>
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                            <div className="p-2 rounded border text-[10px] font-bold bg-indigo-50 border-indigo-200 text-indigo-700">
+                                <span className="mr-1">A.</span> Iroko Tree
+                            </div>
+                            <div className="p-2 rounded border text-[10px] font-bold bg-white border-slate-200 text-slate-500">
+                                <span className="mr-1">B.</span> Soil Texture
+                            </div>
+                            <div className="p-2 rounded border text-[10px] font-bold bg-white border-slate-200 text-slate-500">
+                                <span className="mr-1">C.</span> Water PH
+                            </div>
+                            <div className="p-2 rounded border text-[10px] font-bold bg-white border-slate-200 text-slate-500">
+                                <span className="mr-1">D.</span> Sunlight
+                            </div>
                         </div>
                     </div>
-                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 opacity-60">
-                         <span className="text-xs font-bold text-slate-400">Question 2 (Theory)</span>
-                         <p className="font-medium text-slate-800 mt-1">Define the term 'Energy' and list 3 sources.</p>
-                         <div className="h-2 bg-slate-200 rounded mt-2 w-full"></div>
-                         <div className="h-2 bg-slate-200 rounded mt-1 w-2/3"></div>
+                    <div className="flex items-center justify-center gap-1 opacity-20">
+                        <div className="w-2 h-2 rounded-full bg-slate-300"></div>
+                        <div className="w-2 h-2 rounded-full bg-slate-300"></div>
+                        <div className="w-2 h-2 rounded-full bg-slate-300"></div>
                     </div>
                 </div>
-                <div className="mt-6 flex justify-between items-center">
-                    <div className="flex -space-x-2">
-                        <div className="w-8 h-8 rounded-full bg-blue-500 border-2 border-white"></div>
-                        <div className="w-8 h-8 rounded-full bg-amber-500 border-2 border-white"></div>
-                        <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-600">+4</div>
-                    </div>
-                    <button className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg">Download PDF</button>
+            </div>
+            
+            {/* Floating Decorations */}
+            <div className="absolute -bottom-6 -left-6 bg-white p-3 rounded-xl shadow-xl border border-slate-100 transform -rotate-6 hidden md:block">
+                <div className="flex items-center gap-2 text-indigo-600 font-black text-xs uppercase">
+                    <i className="fas fa-check-double"></i> WAEC Standard
                 </div>
             </div>
         </div>
       </header>
 
-      {/* Features Grid */}
-      <section className="bg-slate-50 py-16 px-6">
-        <div className="max-w-7xl mx-auto">
-            <div className="text-center max-w-2xl mx-auto mb-12">
-                <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Three Ways to Create</h2>
-                <p className="text-slate-600">Whether you have handwritten notes, a topic in mind, or need past questions, we have you covered.</p>
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 bg-slate-50 relative">
+        <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-16">
+                <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-4">Simple, Fair Pricing</h2>
+                <p className="text-slate-600 max-w-2xl mx-auto">Choose the plan that fits your school or individual needs. No hidden fees.</p>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                    <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 text-2xl mb-6">
-                        <i className="fas fa-camera"></i>
+                {/* Free Plan */}
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col h-full">
+                    <div className="mb-6">
+                        <h3 className="text-xl font-bold text-slate-800">Free Trial</h3>
+                        <p className="text-slate-500 text-sm">Test the AI magic</p>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-3">Snap-to-Text</h3>
-                    <p className="text-slate-600 leading-relaxed">
-                        Have handwritten questions? Just snap a photo. Our AI reads your handwriting and converts it into a typed exam paper instantly.
-                    </p>
-                </div>
-                
-                <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">POPULAR</div>
-                    <div className="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 text-2xl mb-6">
-                        <i className="fas fa-magic"></i>
+                    <div className="mb-8">
+                        <span className="text-4xl font-black">₦0</span>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-3">AI Generator</h3>
-                    <p className="text-slate-600 leading-relaxed">
-                        Select a Subject (e.g., Civic Education), a Topic, and Difficulty. The AI generates fresh, high-quality questions for you in seconds.
-                    </p>
+                    <ul className="space-y-4 mb-10 flex-1">
+                        <li className="flex items-center gap-2 text-sm text-slate-600"><i className="fas fa-check-circle text-emerald-500"></i> {config.initialFreeTokens} Free AI Tokens</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-600"><i className="fas fa-check-circle text-emerald-500"></i> Snap-to-Text OCR</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-600"><i className="fas fa-check-circle text-emerald-500"></i> WAEC/NECO Standards</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-600"><i className="fas fa-check-circle text-emerald-500"></i> PDF & Word Export</li>
+                    </ul>
+                    <button onClick={onGetStarted} className="w-full py-3 px-6 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors">Start Free</button>
                 </div>
 
-                <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                    <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 text-2xl mb-6">
-                        <i className="fas fa-database"></i>
+                {/* Starter Plan */}
+                <div className="bg-white p-8 rounded-3xl border-2 border-indigo-600 shadow-xl flex flex-col h-full relative">
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest">Most Popular</div>
+                    <div className="mb-6">
+                        <h3 className="text-xl font-bold text-slate-800">Refill</h3>
+                        <p className="text-slate-500 text-sm">For consistent creators</p>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-3">Question Bank</h3>
-                    <p className="text-slate-600 leading-relaxed">
-                        Access thousands of past questions. Search by topic or class and drag them directly into your exam paper.
-                    </p>
+                    <div className="mb-8">
+                        <span className="text-4xl font-black">₦{config.starterPrice.toLocaleString()}</span>
+                        <span className="text-slate-400 text-sm ml-2">/ 30 tokens</span>
+                    </div>
+                    <ul className="space-y-4 mb-10 flex-1">
+                        <li className="flex items-center gap-2 text-sm text-slate-600"><i className="fas fa-check-circle text-indigo-500"></i> 30 Additional AI Tokens</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-600"><i className="fas fa-check-circle text-indigo-500"></i> Priority Question Generation</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-600"><i className="fas fa-check-circle text-indigo-500"></i> Smart Answer Keys</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-600"><i className="fas fa-check-circle text-indigo-500"></i> Question Bank Access</li>
+                    </ul>
+                    <button onClick={onLogin} className="w-full py-3 px-6 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Upgrade Now</button>
+                </div>
+
+                {/* Ultra Plan */}
+                <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-sm flex flex-col h-full text-white">
+                    <div className="mb-6">
+                        <h3 className="text-xl font-bold">Ultra (Per User)</h3>
+                        <p className="text-slate-400 text-sm">Power users & Specialists</p>
+                    </div>
+                    <div className="mb-8">
+                        <span className="text-4xl font-black">₦{config.ultraPrice.toLocaleString()}</span>
+                        <span className="text-slate-500 text-sm ml-2">/ account</span>
+                    </div>
+                    <ul className="space-y-4 mb-10 flex-1">
+                        <li className="flex items-center gap-2 text-sm text-slate-300"><i className="fas fa-crown text-amber-500"></i> UNLIMITED AI Usage</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-300"><i className="fas fa-check-circle text-amber-500"></i> Premium Exam Templates</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-300"><i className="fas fa-check-circle text-amber-500"></i> Advanced Compliance Checks</li>
+                        <li className="flex items-center gap-2 text-sm text-slate-300"><i className="fas fa-check-circle text-amber-500"></i> Dedicated 24/7 Support</li>
+                    </ul>
+                    <button onClick={onLogin} className="w-full py-3 px-6 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-100 transition-colors">Go Unlimited</button>
                 </div>
             </div>
+            <p className="text-center text-xs text-slate-400 mt-12 italic">Note: Unlimited access is per-account. Even school officers must upgrade individual accounts for unlimited AI.</p>
         </div>
       </section>
 
-      {/* Advanced Tools Section */}
-      <section className="py-16 px-6">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-16">
-              <div className="flex-1">
-                  <div className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 font-bold rounded-full text-xs mb-4">AI-POWERED TOOLS</div>
-                  <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-6">Smarter Exams, Better Results</h2>
-                  <div className="space-y-6">
-                      <div className="flex gap-4">
-                          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0"><i className="fas fa-brain"></i></div>
-                          <div>
-                              <h4 className="font-bold text-lg text-slate-900">Smart Options & Distractors</h4>
-                              <p className="text-slate-600 text-sm">AI suggests "Smart Options" to replace weak wrong answers, making your multiple-choice questions harder to guess.</p>
-                          </div>
-                      </div>
-                      <div className="flex gap-4">
-                          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 shrink-0"><i className="fas fa-list-check"></i></div>
-                          <div>
-                              <h4 className="font-bold text-lg text-slate-900">Instant Marking Guides</h4>
-                              <p className="text-slate-600 text-sm">For theory questions, the AI automatically generates a detailed Marking Guide (Rubric) to help you grade consistently.</p>
-                          </div>
-                      </div>
-                      <div className="flex gap-4">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><i className="fas fa-qrcode"></i></div>
-                          <div>
-                              <h4 className="font-bold text-lg text-slate-900">Secure QR Codes</h4>
-                              <p className="text-slate-600 text-sm">Every paper gets a unique QR code. Scan it to access the digital version or verify the exam source instantly.</p>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-              <div className="flex-1 w-full bg-slate-900 rounded-2xl p-6 md:p-8 shadow-2xl text-white relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
-                   <div className="relative z-10">
-                       <div className="flex items-center justify-between mb-8">
-                           <h3 className="font-bold"><i className="fas fa-robot mr-2"></i> AI Assistant</h3>
-                       </div>
-                       <div className="space-y-4">
-                           <div className="bg-slate-800 p-4 rounded-lg rounded-tl-none border border-slate-700">
-                               <p className="text-sm">I've noticed this question is a bit too easy for JSS 3.</p>
-                           </div>
-                           <div className="bg-indigo-600 p-4 rounded-lg rounded-tr-none self-end ml-12">
-                               <p className="text-sm font-bold">Use "Fix Wrong Options" to make it harder.</p>
-                           </div>
-                            <div className="bg-slate-800 p-4 rounded-lg rounded-tl-none border border-slate-700">
-                               <p className="text-sm">Done! I've replaced the obvious answers with plausible misconceptions.</p>
-                           </div>
-                       </div>
-                       <div className="mt-8 pt-6 border-t border-slate-700 flex justify-between items-center">
-                           <div className="text-xs text-slate-400">Compliance Check</div>
-                           <div className="text-green-400 font-bold text-sm"><i className="fas fa-check-circle mr-1"></i> 100% Curriculum Compliant</div>
-                       </div>
-                   </div>
-              </div>
-          </div>
-      </section>
-
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-300 py-12 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white">
-                    <i className="fas fa-layer-group"></i>
+      <footer className="bg-slate-900 text-slate-300 py-16 px-6">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 border-b border-slate-800 pb-12 mb-8">
+            <div className="col-span-1 md:col-span-2 space-y-6">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white">
+                        <i className="fas fa-layer-group"></i>
+                    </div>
+                    <span className="text-lg font-bold text-white">ExamFlow AI</span>
                 </div>
-                <span className="text-lg font-bold text-white">ExamFlow AI</span>
+                <p className="text-sm max-w-sm leading-relaxed text-slate-400">
+                    Revolutionizing education in Nigeria with AI-powered assessment tools. Built by teachers, for teachers.
+                </p>
             </div>
-            <p className="text-sm text-center md:text-left">© {new Date().getFullYear()} ExamFlow AI. Built for Education.</p>
-            <div className="flex gap-4">
-                <a href="#" className="hover:text-white"><i className="fab fa-twitter"></i></a>
-                <a href="#" className="hover:text-white"><i className="fab fa-facebook"></i></a>
-                <a href="#" className="hover:text-white"><i className="fab fa-instagram"></i></a>
+            <div>
+                <h4 className="text-white font-bold mb-4 uppercase text-xs tracking-widest">Navigation</h4>
+                <ul className="space-y-2 text-sm">
+                    <li><button onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})} className="hover:text-indigo-400 transition-colors">Home</button></li>
+                    <li><button onClick={scrollToPricing} className="hover:text-indigo-400 transition-colors">Pricing</button></li>
+                    <li><button onClick={onLogin} className="hover:text-indigo-400 transition-colors">Login</button></li>
+                </ul>
+            </div>
+            <div>
+                <h4 className="text-white font-bold mb-4 uppercase text-xs tracking-widest">Connect With Us</h4>
+                <div className="flex gap-4 text-xl">
+                    {config.socialLinks.twitter && (
+                        <a href={config.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">
+                            <i className="fab fa-twitter"></i>
+                        </a>
+                    )}
+                    {config.socialLinks.facebook && (
+                        <a href={config.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">
+                            <i className="fab fa-facebook"></i>
+                        </a>
+                    )}
+                    {config.socialLinks.instagram && (
+                        <a href={config.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-pink-500 transition-colors">
+                            <i className="fab fa-instagram"></i>
+                        </a>
+                    )}
+                    {config.socialLinks.linkedin && (
+                        <a href={config.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="hover:text-blue-700 transition-colors">
+                            <i className="fab fa-linkedin"></i>
+                        </a>
+                    )}
+                </div>
+            </div>
+        </div>
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500">
+            <p>© {new Date().getFullYear()} ExamFlow AI. Built with ❤️ in Nigeria.</p>
+            <div className="flex gap-6">
+                <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+                <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
             </div>
         </div>
       </footer>

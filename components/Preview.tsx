@@ -15,22 +15,19 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
   const [showAnswerKey, setShowAnswerKey] = useState(false);
 
   useEffect(() => {
-    if (paper.schoolId) {
-      const s = getSchool(paper.schoolId);
+    if (paper.school_id) {
+      const s = getSchool(paper.school_id);
       setSchool(s);
     }
-  }, [paper.schoolId]);
+  }, [paper.school_id]);
 
   const handlePrint = () => {
-    // Timeout helps ensure any pending React renders finish and prevents
-    // strict mode or event loop issues from blocking the print dialog.
     setTimeout(() => {
         window.print();
     }, 100);
   };
 
   const handleDownloadDocx = () => {
-    // Mock DOCX download
     const content = document.getElementById('printable-content')?.innerHTML;
     const blob = new Blob(['<!DOCTYPE html><html><body>' + content + '</body></html>'], {
       type: 'application/msword'
@@ -44,14 +41,13 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
     document.body.removeChild(link);
   };
 
-  // Template Styles
-  const themeColor = school?.template.themeColor || '#000000';
-  const fontFamily = school?.template.fontFamily === 'serif' ? 'serif' : school?.template.fontFamily === 'mono' ? 'monospace' : 'sans-serif';
-  const isCentered = school?.template.headerLayout !== 'LEFT';
+  // Template Styles - Using correct snake_case properties from types.ts
+  const themeColor = school?.template.theme_color || '#000000';
+  const fontFamily = school?.template.font_family === 'serif' ? 'serif' : school?.template.font_family === 'mono' ? 'monospace' : 'sans-serif';
+  const isCentered = school?.template.header_layout !== 'LEFT';
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans">
-      {/* Top Bar - No Print */}
       <div className="no-print bg-slate-800 text-white p-4 sticky top-0 z-50 flex justify-between items-center shadow-lg">
         <div className="flex items-center gap-4">
             <button onClick={() => onNavigate('EDITOR')} className="text-sm hover:text-slate-300 transition-colors">
@@ -66,7 +62,6 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
                     >
                         <div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all ${showAnswerKey ? 'left-6' : 'left-1'}`}></div>
                     </button>
-                    {/* Tooltip for Answer Key */}
                     <div className="relative group cursor-help">
                         <i className="fas fa-question-circle text-slate-400 hover:text-white text-xs"></i>
                         <div className="absolute hidden group-hover:block bg-black text-white text-xs p-2 rounded w-48 top-full mt-2 left-1/2 -translate-x-1/2 z-20 shadow-lg text-center">
@@ -86,50 +81,38 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
         </div>
       </div>
 
-      {/* Paper Area - Use flex-center for on-screen, but block for print */}
       <div className="flex justify-center p-4 md:p-8 overflow-auto print:overflow-visible print:block print:p-0">
         <div 
             id="printable-content" 
             className="bg-white w-full max-w-[210mm] min-h-[297mm] p-[15mm] shadow-2xl text-black print:shadow-none print:w-full print:max-w-none print:min-h-0 print:p-0 print:m-0"
             style={{ fontFamily }}
         >
-            
-          {/* Exam Header */}
           <div className="border-b-2 pb-6 mb-6 relative" style={{ borderColor: themeColor }}>
-            
-            {/* Header Content Wrapper */}
             <div className={`flex ${isCentered ? 'flex-col items-center text-center' : 'flex-row items-center gap-6 text-left'} mb-6`}>
-                
-                {/* Logo */}
-                {school?.logoUrl && (
+                {school?.logo_url && (
                     <img 
-                        src={school.logoUrl} 
+                        src={school.logo_url} 
                         alt="School Logo" 
                         className={`${isCentered ? 'h-20 mb-3' : 'h-24 w-24 object-contain'}`} 
                     />
                 )}
-
-                {/* School Name & Exam Title */}
                 <div className="flex-1">
                     <h1 
                         className="text-3xl font-extrabold uppercase leading-tight" 
                         style={{ color: themeColor }}
                     >
-                        {paper.header.schoolName || school?.name || "School Name"}
+                        {paper.header.school_name || school?.name || "School Name"}
                     </h1>
                     <h2 className="text-lg font-bold mt-1 text-black opacity-90 uppercase">
-                        {paper.header.term} • {paper.header.examType}
+                        {paper.header.term} • {paper.header.exam_type}
                     </h2>
                     <p className="font-semibold text-sm opacity-75 mt-1">Academic Session: {new Date().getFullYear()}</p>
                 </div>
-
-                {/* QR Code (Visible on Print) */}
                 <div className="hidden print:block absolute top-0 right-0">
-                    <QRCode value={paper.qrCodeData} size={64} />
+                    <QRCode value={paper.qr_code_data} size={64} />
                 </div>
             </div>
             
-            {/* Metadata Grid */}
             <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm font-medium border-t border-slate-300 pt-4">
                 <div className="flex items-end">
                     <span className="w-24 font-bold opacity-70">SUBJECT:</span> 
@@ -137,7 +120,7 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
                 </div>
                 <div className="flex items-end">
                     <span className="w-24 font-bold opacity-70">CLASS:</span> 
-                    <span className="flex-1 border-b border-dotted border-black uppercase font-bold text-lg leading-none pb-1">{paper.header.className}</span>
+                    <span className="flex-1 border-b border-dotted border-black uppercase font-bold text-lg leading-none pb-1">{paper.header.class_name}</span>
                 </div>
                 <div className="flex items-end">
                     <span className="w-24 font-bold opacity-70">TIME:</span> 
@@ -153,15 +136,13 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
                 </div>
             </div>
 
-            {/* Instructions */}
-            {paper.header.generalInstructions && (
+            {paper.header.general_instructions && (
                 <div className="mt-6 p-3 bg-slate-50 border border-slate-200 rounded text-sm italic print:bg-transparent print:border-none print:p-0 print:mt-4">
-                    <strong>INSTRUCTIONS:</strong> {paper.header.generalInstructions}
+                    <strong>INSTRUCTIONS:</strong> {paper.header.general_instructions}
                 </div>
             )}
           </div>
 
-          {/* Questions Body */}
           <div className="space-y-8">
             {paper.sections.map((section, idx) => (
               <div key={section.id}>
@@ -187,7 +168,7 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
                           {q.type === QuestionType.OBJECTIVE && q.options && (
                             <div className="grid grid-cols-2 gap-x-6 gap-y-2 ml-1 mt-2">
                               {q.options.map((opt, oIdx) => (
-                                <div key={oIdx} className={`text-sm flex items-start gap-2 ${showAnswerKey && q.correctAnswer && opt.includes(q.correctAnswer) ? 'font-bold text-green-700 bg-green-100 rounded px-1' : ''}`}>
+                                <div key={oIdx} className={`text-sm flex items-start gap-2 ${showAnswerKey && q.correct_answer && opt.includes(q.correct_answer) ? 'font-bold text-green-700 bg-green-100 rounded px-1' : ''}`}>
                                   <span className="font-bold">{String.fromCharCode(65 + oIdx)}.</span>
                                   <span>{opt}</span>
                                 </div>
@@ -197,7 +178,7 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
 
                           {q.type === QuestionType.FILL_IN_THE_BLANK && (
                              <div className="border-b-2 border-slate-300 w-full max-w-xs h-6 inline-block ml-1">
-                                {showAnswerKey && q.correctAnswer && <span className="text-green-700 font-bold font-mono px-2">{q.correctAnswer}</span>}
+                                {showAnswerKey && q.correct_answer && <span className="text-green-700 font-bold font-mono px-2">{q.correct_answer}</span>}
                              </div>
                           )}
 
@@ -212,7 +193,6 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
                                         </div>
                                     )}
                                 </div>
-                                {/* Print Only Lines for Theory */}
                                 <div className="hidden print:block mt-8 space-y-6">
                                     <div className="border-b border-slate-300 w-full"></div>
                                     <div className="border-b border-slate-300 w-full"></div>
@@ -229,13 +209,12 @@ export const Preview: React.FC<PreviewProps> = ({ paper, onNavigate, currentUser
             ))}
           </div>
 
-          {/* Footer with QR Code for tracking */}
           <div className="mt-12 pt-4 border-t border-gray-300 flex justify-between items-end break-inside-avoid">
             <div className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">
               Generated by ExamFlow AI
             </div>
             <div className="flex flex-col items-center">
-              <QRCode value={paper.qrCodeData} size={48} />
+              <QRCode value={paper.qr_code_data} size={48} />
               <span className="text-[10px] text-gray-400 mt-1 font-mono">{paper.id.substring(0, 8)}</span>
             </div>
           </div>
